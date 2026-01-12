@@ -1,0 +1,5 @@
+{
+  "name": "FDA 510(k) Agentic Reviewer",
+  "description": "An AI-powered system for FDA 510(k) regulatory review, featuring automated summarization, guidance synthesis, and intelligent note-keeping with varied artistic UI themes.",
+  "requestFramePermissions": []
+}
