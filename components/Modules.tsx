@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { AgentConfig, ArtStyle, MagicType } from '../types';
-import { MAGICS, UI_TEXT } from '../constants';
+import { MAGICS, UI_TEXT, AVAILABLE_MODELS } from '../constants';
 import { generateContent } from '../services/geminiService';
 import { Button, Card } from './UI';
 import ReactMarkdown from 'react-markdown';
@@ -12,38 +12,149 @@ interface ModuleProps {
   style: ArtStyle;
 }
 
-// --- Module 1: 510(k) Summary ---
-export const SummaryGenerator: React.FC<ModuleProps> = ({ config, lang, style }) => {
-  const [file, setFile] = useState<File | null>(null);
-  const [output, setOutput] = useState<string>("");
-  const [loading, setLoading] = useState(false);
-  const t = UI_TEXT[lang];
+// --- Helper Component for Advanced Input & Config ---
+interface AdvancedInputProps {
+  style: ArtStyle;
+  onGenerate: (data: { file: File | null, text: string, model: string, prompt: string }) => void;
+  loading: boolean;
+  defaultModel: string;
+  defaultPrompt: string;
+  buttonLabel: string;
+}
 
-  const handleGenerate = async () => {
-    if (!file) return;
-    setLoading(true);
-    const result = await generateContent(config.fda_summarizer, "Generate the 510(k) summary tables and narrative.", file);
-    setOutput(result);
-    setLoading(false);
+const AdvancedInput: React.FC<AdvancedInputProps> = ({ 
+  style, onGenerate, loading, defaultModel, defaultPrompt, buttonLabel 
+}) => {
+  const [mode, setMode] = useState<'upload' | 'paste'>('upload');
+  const [file, setFile] = useState<File | null>(null);
+  const [textInput, setTextInput] = useState('');
+  const [selectedModel, setSelectedModel] = useState(defaultModel);
+  const [systemPrompt, setSystemPrompt] = useState(defaultPrompt);
+  const [showSettings, setShowSettings] = useState(false);
+
+  const handleSubmit = () => {
+    onGenerate({
+      file: mode === 'upload' ? file : null,
+      text: mode === 'paste' ? textInput : '',
+      model: selectedModel,
+      prompt: systemPrompt
+    });
   };
 
+  const isReady = (mode === 'upload' && file) || (mode === 'paste' && textInput.length > 0);
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-full">
-      <div className="space-y-4">
-        <Card title={t.upload} style={style}>
+    <div className="space-y-4">
+      <div className="flex justify-between items-center mb-2">
+         <div className="flex gap-2 bg-black/10 p-1 rounded-lg">
+           <button 
+             onClick={() => setMode('upload')}
+             className={`px-3 py-1 text-sm rounded transition-all ${mode === 'upload' ? 'bg-white shadow text-black' : 'opacity-60'}`}
+           >
+             📁 Upload
+           </button>
+           <button 
+             onClick={() => setMode('paste')}
+             className={`px-3 py-1 text-sm rounded transition-all ${mode === 'paste' ? 'bg-white shadow text-black' : 'opacity-60'}`}
+           >
+             📝 Paste
+           </button>
+         </div>
+         <button 
+           onClick={() => setShowSettings(!showSettings)} 
+           className="text-xs opacity-60 hover:opacity-100 underline"
+         >
+           {showSettings ? 'Hide Settings' : 'Advanced Settings'}
+         </button>
+      </div>
+
+      <div className={`transition-all duration-300 overflow-hidden ${showSettings ? 'max-h-96 opacity-100 mb-4' : 'max-h-0 opacity-0'}`}>
+        <div className="p-3 bg-black/5 rounded border border-black/10 space-y-3 text-sm">
+          <div>
+            <label className="block opacity-70 mb-1 font-bold">Model</label>
+            <select 
+              value={selectedModel} 
+              onChange={(e) => setSelectedModel(e.target.value)}
+              className="w-full p-2 rounded bg-white/50 border border-gray-300"
+            >
+              {AVAILABLE_MODELS.map(m => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block opacity-70 mb-1 font-bold">System Prompt</label>
+            <textarea 
+              value={systemPrompt}
+              onChange={(e) => setSystemPrompt(e.target.value)}
+              className="w-full p-2 rounded bg-white/50 border border-gray-300 h-32 text-xs font-mono"
+            />
+          </div>
+        </div>
+      </div>
+
+      <Card title={mode === 'upload' ? "File Upload" : "Paste Content"} style={style}>
+        {mode === 'upload' ? (
           <input 
             type="file" 
             accept=".pdf,.txt,.md"
             onChange={(e) => setFile(e.target.files?.[0] || null)}
             className="w-full p-2 border rounded"
           />
-          <div className="mt-4">
-            <Button accentColor={style.palette.accent} onClick={handleGenerate} disabled={loading || !file} className="text-white w-full">
-              {loading ? t.generating : t.buttons.generate}
-            </Button>
-          </div>
-        </Card>
-      </div>
+        ) : (
+          <textarea 
+            placeholder="Paste text or markdown content here..."
+            value={textInput}
+            onChange={(e) => setTextInput(e.target.value)}
+            className="w-full h-48 p-2 rounded bg-white/50 border border-gray-300 focus:outline-none focus:ring-1"
+          />
+        )}
+        <div className="mt-4">
+          <Button accentColor={style.palette.accent} onClick={handleSubmit} disabled={loading || !isReady} className="text-white w-full">
+            {loading ? "Agent Working..." : buttonLabel}
+          </Button>
+        </div>
+      </Card>
+    </div>
+  );
+};
+
+
+// --- Module 1: 510(k) Summary ---
+export const SummaryGenerator: React.FC<ModuleProps> = ({ config, lang, style }) => {
+  const [output, setOutput] = useState<string>("");
+  const [loading, setLoading] = useState(false);
+  const t = UI_TEXT[lang];
+
+  const handleGenerate = async ({ file, text, model, prompt }: { file: File | null, text: string, model: string, prompt: string }) => {
+    setLoading(true);
+    // Create a temporary agent config based on user selection
+    const tempAgent = {
+      ...config.fda_summarizer,
+      model_name: model,
+      system_prompt: prompt
+    };
+
+    let userRequest = "Generate the 510(k) summary tables and narrative.";
+    if (text) {
+      userRequest += `\n\n[DATA START]\n${text}\n[DATA END]`;
+    }
+
+    const result = await generateContent(tempAgent, userRequest, file);
+    setOutput(result);
+    setLoading(false);
+  };
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-full">
+      <AdvancedInput 
+        style={style}
+        onGenerate={handleGenerate}
+        loading={loading}
+        defaultModel={config.fda_summarizer.model_name}
+        defaultPrompt={config.fda_summarizer.system_prompt}
+        buttonLabel={t.buttons.generate}
+      />
       <Card title="Output" style={style}>
         <div className="overflow-y-auto h-[600px] markdown-body text-sm">
           {output ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{output}</ReactMarkdown> : <span className="opacity-50">Result will appear here...</span>}
@@ -55,36 +166,38 @@ export const SummaryGenerator: React.FC<ModuleProps> = ({ config, lang, style })
 
 // --- Module 2: Guidance Synthesizer ---
 export const GuidanceSynthesizer: React.FC<ModuleProps> = ({ config, lang, style }) => {
-  const [file, setFile] = useState<File | null>(null);
   const [output, setOutput] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const t = UI_TEXT[lang];
 
-  const handleGenerate = async () => {
-    if (!file) return;
+  const handleGenerate = async ({ file, text, model, prompt }: { file: File | null, text: string, model: string, prompt: string }) => {
     setLoading(true);
-    const result = await generateContent(config.fda_guidance_expert, "Analyze guidance and create checklists.", file);
+    const tempAgent = {
+      ...config.fda_guidance_expert,
+      model_name: model,
+      system_prompt: prompt
+    };
+
+    let userRequest = "Analyze guidance and create checklists.";
+    if (text) {
+      userRequest += `\n\n[GUIDANCE TEXT START]\n${text}\n[GUIDANCE TEXT END]`;
+    }
+
+    const result = await generateContent(tempAgent, userRequest, file);
     setOutput(result);
     setLoading(false);
   };
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-full">
-      <div className="space-y-4">
-        <Card title={t.upload} style={style}>
-          <input 
-            type="file" 
-            accept=".pdf,.txt"
-            onChange={(e) => setFile(e.target.files?.[0] || null)}
-            className="w-full p-2 border rounded"
-          />
-          <div className="mt-4">
-            <Button accentColor={style.palette.accent} onClick={handleGenerate} disabled={loading || !file} className="text-white w-full">
-              {loading ? t.generating : t.buttons.synthesize}
-            </Button>
-          </div>
-        </Card>
-      </div>
+      <AdvancedInput 
+        style={style}
+        onGenerate={handleGenerate}
+        loading={loading}
+        defaultModel={config.fda_guidance_expert.model_name}
+        defaultPrompt={config.fda_guidance_expert.system_prompt}
+        buttonLabel={t.buttons.synthesize}
+      />
       <Card title="Checklists" style={style}>
         <div className="overflow-y-auto h-[600px] markdown-body text-sm">
            {output ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{output}</ReactMarkdown> : <span className="opacity-50">Checklists will appear here...</span>}

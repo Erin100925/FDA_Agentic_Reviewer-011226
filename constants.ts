@@ -1,5 +1,11 @@
 import { AgentConfig, ArtStyle, MagicDef } from './types';
 
+export const AVAILABLE_MODELS = [
+  "gemini-2.5-flash",
+  "gemini-3-pro-preview",
+  "gemini-3-flash-preview",
+];
+
 export const ART_STYLES: ArtStyle[] = [
   { id: 'minimalist', name: 'Bauhaus Modern', description: 'Clean, geometric, functional', palette: { primary: '#005596', secondary: '#F0F0F0', accent: '#D93025', background: '#FFFFFF', text: '#1F2937', fontFamily: 'sans-serif' } },
   { id: 'vangogh', name: 'Starry Night', description: 'Swirling blues and yellows', palette: { primary: '#1D4E89', secondary: '#E8D44D', accent: '#D79227', background: '#0B1D3F', text: '#FFFFFF', fontFamily: 'serif' } },
@@ -80,7 +86,7 @@ export const MAGICS: MagicDef[] = [
 export const UI_TEXT = {
   en: {
     title: "FDA 510(k) Agentic AI",
-    upload: "Upload PDF/Text",
+    upload: "Input Data",
     generating: "Agent working...",
     tabs: {
       summary: "510(k) Summary",
@@ -97,7 +103,7 @@ export const UI_TEXT = {
   },
   tc: {
     title: "FDA 510(k) 智能審查系統",
-    upload: "上傳 PDF/文本",
+    upload: "輸入資料",
     generating: "代理正在運行...",
     tabs: {
       summary: "510(k) 摘要",
